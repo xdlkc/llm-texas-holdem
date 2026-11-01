@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Royal Hold'em · AI 德州扑克多桌竞技场</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sleek Game HUD Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand-logo">♠</div>
+        <span class="brand-title">ROYAL HOLD'EM</span>
+
+        <!-- View Switcher: QQ Game Hall (All Tables) vs Single Table Arena -->
+        <div class="view-mode-switch">
+          <button id="btnSwitchToLobby" class="view-switch-btn active" title="切换到 QQ 游戏大厅式全牌桌总览视角">
+            🏛️ 游戏大厅 (<span id="lobbyTablesCountBadge">10</span>桌)
+          </button>
+          <button id="btnSwitchToActiveTable" class="view-switch-btn" title="进入当前选中的牌桌对局">
+            🃏 <span id="activeTableShortLabel">当前牌桌</span>
+          </button>
+        </div>
+
+        <!-- Multi-Table Switcher Tabs (visible in table view or quick jump) -->
+        <div id="tableTabsBar" class="table-tabs-bar"></div>
+        <button id="btnOpenNewTableModal" class="btn btn-xs btn-gold btn-add-table" title="在大厅新建人机对战桌或纯 AI 观战桌">
+          ➕ 新增牌桌
+        </button>
+      </div>
+
+      <div id="topbarTableCenterHud" class="topbar-center hidden">
+        <button id="btnToggleTableMode" class="mode-badge-btn" title="点击切换【人机参战】与【纯AI观战】模式">
+          <span id="hudTableModeBadge">🎮 人机参战</span>
+        </button>
+        <div class="hud-divider"></div>
+        <div class="hud-chip">
+          <span>局数</span>
+          <strong id="hudHandNumber">#0</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-chip">
+          <strong id="hudStreetName" class="street-highlight">等待开局</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-chip">
+          <span>盲注</span>
+          <strong id="hudBlinds">10/20</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-chip" title="每把牌均通过 CSPRNG 加密随机洗牌切牌生成独立唯一牌靴 SHA-256 签名">
+          <span>🎲 牌靴</span>
+          <strong id="hudShoeBadge" style="color:#a78bfa;font-family:monospace;">待洗牌</strong>
+        </div>
+      </div>
+
+      <div id="topbarLobbyCenterHud" class="topbar-center">
+        <div class="hud-chip">
+          <span>🎰 拉斯维加斯并发桌</span>
+          <strong id="hudTotalTablesCount">10 张</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-chip">
+          <span>🤖 待命 AI 牌手</span>
+          <strong id="hudTotalRosterCount" class="street-highlight">26 位</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-chip">
+          <span>💾 SQLite 实时落库</span>
+          <strong id="hudTotalHandsRecorded" style="color:#6ee7b7;">已落库 0 手</strong>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button id="btnNewHand" class="btn btn-gold hidden" title="开始新一手牌 (Space)">
+          🃏 发牌
+        </button>
+        <button id="btnOpenThinkingModal" class="btn btn-glass btn-thinking-highlight" title="查看本桌每位 AI 牌手的完整思考过程、赔率计算、原生思维链与 Prompt 细节">
+          🧠 AI思考透视 <span id="thinkingActionsCountBadge" class="mini-count">0</span>
+        </button>
+        <button id="btnOpenTableSeatsModal" class="btn btn-glass" title="管理当前牌桌座位、给本桌增加 AI 牌手">
+          🪑 本桌牌手 <span id="tableSeatsCountBadge" class="mini-count">6</span>
+        </button>
+        <button id="btnOpenRosterModal" class="btn btn-glass" title="打开全量 AI 牌手名册库（横向列表展开 · 点开查看详情与新增牌手）">
+          👥 牌手库 <span id="rosterTotalCountBadge" class="mini-count">26</span>
+        </button>
+        <button id="btnOpenHistoryModal" class="btn btn-glass" title="查看 SQLite 数据库持久化的历史对局与 AI 思考复盘">
+          🗄️ 对局库 <span id="historyCountBadge" class="mini-count">0</span>
+        </button>
+        <button id="btnOpenPromptModal" class="btn btn-glass btn-guard" title="查看与编辑 Agent 统一防越界提示词护栏">
+          🛡️ 护栏
+        </button>
+        <button id="btnToggleReveal" class="btn btn-glass" title="切换暗牌竞技或明牌透视所有 AI 底牌">
+          👁️ <span id="revealModeLabel">暗牌</span>
+        </button>
+        <button id="btnToggleAudio" class="btn btn-glass btn-icon-only" title="音效开关">
+          <span id="audioModeLabel">🔊</span>
+        </button>
+        <button id="btnOpenRulesModal" class="btn btn-glass btn-icon-only" title="德州扑克牌型图鉴">
+          📖
+        </button>
+        <button id="btnToggleDrawer" class="btn btn-glass" title="展开/收起实时战况与 AI 思考侧边栏">
+          📜 战况
+        </button>
+      </div>
+    </header>
+
+    <!-- Full-Screen Casino Stage -->
+    <main class="main-stage">
+      <!-- ===============================================================
+           DEFAULT VIEW: QQ-Game-Hall-Style All-Tables Lobby View
+           =============================================================== -->
+      <section id="lobbyHallView" class="lobby-hall-view">
+        <div class="hall-header-banner">
+          <div class="hall-banner-left">
+            <div class="hall-title-row">
+              <h1>🎰 拉斯维加斯 · 多桌并发游戏大厅 (全桌独立 CSPRNG 随机发牌 & 实时落库)</h1>
+              <span class="hall-sub-pill">每桌独立 SHA-256 加密牌靴 · 全场并发实时博弈 · 每局自动写入 SQLite</span>
+            </div>
+            <p class="hall-subtitle">
+              大厅内所有观战牌桌均在后台<strong>独立并发洗牌、发牌与博弈</strong>（每把牌完全随机且实时展示公共牌与底池）；点击 <strong>「👁️ 进桌观战」</strong> 或 <strong>「👑 入座参战」</strong> 可无缝切入任意牌局。
+            </p>
+          </div>
+          <div class="hall-banner-right">
+            <div id="hallCategoryFilterBar" class="hall-filter-tabs">
+              <button class="hall-filter-btn active" data-hall-filter="all">🌐 全部牌桌</button>
+              <button class="hall-filter-btn" data-hall-filter="spectate">👁️ 纯 AI 观战房</button>
+              <button class="hall-filter-btn" data-hall-filter="play">🎮 人机对战房</button>
+              <button class="hall-filter-btn" data-hall-filter="open">💺 有空位可加人</button>
+              <button class="hall-filter-btn" data-hall-filter="high">💎 高额豪客桌</button>
+            </div>
+            <div class="hall-quick-actions">
+              <button id="btnStopAllTablesNow" class="btn btn-glass" style="border-color:rgba(248,113,113,0.65);color:#fecaca;background:rgba(127,29,29,0.38);" title="立即停止全场所有牌桌的 AI 自动运行（零 Token 消耗）">
+                ⏹️ 一键停止全部牌桌
+              </button>
+              <button id="btnToggleLasVegasCasino" class="btn btn-glass btn-thinking-highlight" title="开启/暂停拉斯维加斯全厅多桌后台并发自动博弈">
+                🎰 全场并发博弈: <span id="lasVegasModeLabel">已暂停</span>
+              </button>
+              <button id="btnDealAllTablesNow" class="btn btn-glass" title="立即为大厅所有观战桌重新加密随机洗牌并发新一手牌">
+                🎲 全场洗牌发新局
+              </button>
+              <button id="btnHallCreateTable" class="btn btn-gold">➕ 新增游戏牌桌</button>
+              <button id="btnHallOpenRoster" class="btn btn-glass">👥 AI 牌手库</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid of Visual Mini Poker Tables with Surrounding Chairs (QQ Game Hall Style) -->
+        <div id="hallTablesGrid" class="hall-tables-grid"></div>
+      </section>
+
+      <!-- ===============================================================
+           SINGLE TABLE ARENA VIEW (Shown when entering a table)
+           =============================================================== -->
+      <section id="tableViewport" class="table-viewport hidden">
+        <!-- Floating Back-to-Hall Pill on Top-Left of Table -->
+        <div class="table-floating-nav">
+          <button id="btnBackToHallFloating" class="btn btn-glass btn-sm">
+            🏛️ ◀ 返回游戏大厅
+          </button>
+          <span id="currentTableTitleFloating" class="current-table-pill"></span>
+          <button id="btnFloatingThinkingInspector" class="btn btn-glass btn-sm btn-thinking-highlight">
+            🧠 查看各 AI 思考过程与细节
+          </button>
+        </div>
+        <div class="poker-table-outer">
+          <div class="poker-table-rail">
+            <div class="poker-table-felt">
+              <div class="felt-inner-ring"></div>
+
+              <!-- Center Board: Total Pot, Community Cards, Turn Hint & Winner Overlay -->
+              <div class="table-center-zone">
+                <div class="center-pot-box">
+                  <div class="main-pot-badge">
+                    <span class="pot-coin">🪙</span>
+                    <span class="pot-label">POT</span>
+                    <strong id="centerPotAmount">$0</strong>
+                  </div>
+                  <div id="sidePotsContainer" class="side-pots-row"></div>
+                </div>
+
+                <div id="communityCardsRow" class="community-cards-row"></div>
+
+                <div id="tableStatusBanner" class="table-status-banner">
+                  点击右上角「🃏 发牌」或按 [Space] 开始对局
+                </div>
+
+                <div id="showdownBanner" class="showdown-banner hidden">
+                  <div id="showdownWinnerText" class="showdown-winner-text"></div>
+                  <button id="btnNextHandBanner" class="btn btn-gold btn-sm">下一手 (Space) ▶</button>
+                </div>
+              </div>
+
+              <!-- Up to 9 Player Seats around the oval table -->
+              <div id="seatsContainer" class="seats-layer"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sleek Game Controller Dock at Bottom -->
+        <footer class="action-dock">
+          <div class="dock-left">
+            <div class="hand-rank-capsule">
+              <span id="dockRoleLabel" class="capsule-label">我的牌型</span>
+              <strong id="humanHandStrengthBadge">等待发牌</strong>
+              <span id="humanPotOddsInfo" class="odds-sub"></span>
+            </div>
+
+            <div class="quick-utility-group">
+              <label class="toggle-pill" title="自动推进 AI 回合">
+                <input type="checkbox" id="chkAutoAiStep" checked />
+                <span>AI自动行动</span>
+              </label>
+              <label class="toggle-pill spectate-pill" title="观战模式下每局结束后自动发下一手牌">
+                <input type="checkbox" id="chkAutoNextHandSpectate" checked />
+                <span>自动连发观战</span>
+              </label>
+              <button id="btnManualAiStep" class="btn btn-xs btn-glass" title="单步执行当前 AI">⏭️ 单步AI</button>
+              <button id="btnQuickAddAiToTable" class="btn btn-xs btn-glass" title="给当前牌桌增加 AI 牌手">➕ 加AI上桌</button>
+              <button id="btnRebuyAll" class="btn btn-xs btn-glass" title="全桌补充筹码">💰 补码</button>
+            </div>
+          </div>
+
+          <!-- Spectator Mode Banner (shown when table is in spectate mode or human not seated) -->
+          <div id="spectatorDockBar" class="spectator-dock-bar hidden">
+            <div class="spectator-info">
+              <span class="spectator-eye">👁️ 全明牌观战模式</span>
+              <span id="spectatorStatusText" class="spectator-sub">正在观战多大模型 / Agent 牌手实时博弈（每局自动持久化至 SQLite 数据库）</span>
+            </div>
+            <div class="spectator-actions">
+              <button id="btnSpectateDealNext" class="btn btn-gold btn-sm">▶️ 发观战牌 (Space)</button>
+              <button id="btnSpectateThinkingModal" class="btn btn-glass btn-sm btn-thinking-highlight">🧠 AI 思考全貌透视</button>
+              <button id="btnSpectateAddAi" class="btn btn-glass btn-sm">🪑 给本桌增加 AI 牌手</button>
+              <button id="btnJoinAsHuman" class="btn btn-glass btn-sm">👑 我要上桌参战</button>
+            </div>
+          </div>
+
+          <!-- Human Action Controls (shown when human is seated) -->
+          <div id="humanActionControls" class="dock-right disabled">
+            <div class="raise-sizing-bar">
+              <div class="quick-bet-buttons">
+                <button type="button" class="btn-quick-bet" data-sizing="min">最小</button>
+                <button type="button" class="btn-quick-bet" data-sizing="pot_33">1/3池</button>
+                <button type="button" class="btn-quick-bet" data-sizing="pot_50">1/2池</button>
+                <button type="button" class="btn-quick-bet" data-sizing="pot_66">2/3池</button>
+                <button type="button" class="btn-quick-bet" data-sizing="pot_100">满池</button>
+                <button type="button" class="btn-quick-bet" data-sizing="max">All-In</button>
+              </div>
+              <div class="slider-group">
+                <button type="button" id="btnRaiseMinus" class="btn-step">−</button>
+                <input type="range" id="raiseSlider" min="20" max="2000" step="10" value="40" />
+                <button type="button" id="btnRaisePlus" class="btn-step">+</button>
+                <div class="raise-input-wrap">
+                  <span>$</span>
+                  <input type="number" id="raiseInputNumber" min="20" max="2000" step="10" value="40" />
+                </div>
+              </div>
+            </div>
+
+            <div class="main-action-buttons">
+              <button id="btnActFold" class="btn-poker btn-fold" disabled>
+                <span class="act-title">弃牌</span>
+                <span class="act-sub">FOLD [F]</span>
+              </button>
+
+              <button id="btnActCheckCall" class="btn-poker btn-check-call" disabled>
+                <span id="checkCallTitle" class="act-title">过牌</span>
+                <span id="checkCallSub" class="act-sub">CHECK [C]</span>
+              </button>
+
+              <button id="btnActRaise" class="btn-poker btn-raise" disabled>
+                <span id="raiseTitle" class="act-title">加注</span>
+                <span id="raiseSub" class="act-sub">$40 [R]</span>
+              </button>
+
+              <button id="btnActAllIn" class="btn-poker btn-allin" disabled>
+                <span id="allInTitle" class="act-title">全下</span>
+                <span id="allInSub" class="act-sub">ALL-IN [A]</span>
+              </button>
+            </div>
+          </div>
+        </footer>
+      </section>
+
+      <!-- Collapsible Right Drawer: Logs, AI Reasoning & Guardrail Audit -->
+      <aside id="telemetryDrawer" class="telemetry-drawer hidden">
+        <div class="drawer-header">
+          <div class="sidebar-tabs">
+            <button class="sidebar-tab active" data-tab="tabLogs">🃏 牌局战况</button>
+            <button class="sidebar-tab" data-tab="tabReasoning">🧠 AI 思考</button>
+            <button class="sidebar-tab" data-tab="tabGuardrail">🛡️ 护栏审计</button>
+          </div>
+          <button id="btnCloseDrawer" class="btn-close-drawer" title="收起侧栏">✕</button>
+        </div>
+
+        <div id="tabLogs" class="sidebar-panel active">
+          <div id="handLogList" class="log-feed"></div>
+        </div>
+
+        <div id="tabReasoning" class="sidebar-panel">
+          <div class="panel-header-row">
+            <span>AI 牌手决策推演</span>
+            <label class="mini-checkbox">
+              <input type="checkbox" id="chkShowLiveReasoning" checked />
+              <span>暗牌期透视思考</span>
+            </label>
+          </div>
+          <div id="reasoningFeed" class="reasoning-feed"></div>
+        </div>
+
+        <div id="tabGuardrail" class="sidebar-panel">
+          <div id="guardrailRulesBox" class="guardrail-rules-box"></div>
+          <div class="panel-subheader">最近 Agent 合规审计</div>
+          <div id="guardrailAuditList" class="guardrail-audit-feed"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       Modal 1: AI Player Roster & Table Seat Manager (Horizontal List + Detail View)
+       ========================================================================= -->
+  <div id="rosterModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-xxl">
+      <div class="modal-header">
+        <div class="modal-header-left">
+          <div class="modal-nav-tabs">
+            <button id="tabBtnRosterView" class="modal-nav-tab active" data-view="rosterView">
+              👥 全量 AI 牌手库 (<span id="modalRosterCount">26</span>)
+            </button>
+            <button id="tabBtnTableSeatsView" class="modal-nav-tab" data-view="tableSeatsView">
+              🪑 当前牌桌座位与阵容 (<span id="modalTableSeatsCount">6</span>)
+            </button>
+          </div>
+          <p class="modal-desc">
+            已初始化全部【模型厂商 × 模型】+【5 大 CLI Agent】牌手。默认横向列表展开，点击任意牌手可查看/编辑完整深度人设、思考强度与协议参数，或一键派上当前牌桌。
+          </p>
+        </div>
+        <button class="btn-close-modal" data-close="rosterModal">✕</button>
+      </div>
+
+      <!-- View A: Horizontal Roster List + Slide-in Player Detail Drawer -->
+      <div id="rosterView" class="modal-body roster-split-layout">
+        <div class="roster-list-pane">
+          <div class="roster-toolbar">
+            <div id="rosterFilterBar" class="roster-filter-chips">
+              <button class="filter-chip active" data-filter="all">全部牌手</button>
+              <button class="filter-chip" data-filter="vendor">模型厂商类</button>
+              <button class="filter-chip" data-filter="agent">CLI Agent 类</button>
+              <button class="filter-chip" data-filter="deepseek">DeepSeek</button>
+              <button class="filter-chip" data-filter="zhipu-token-plan">智谱 GLM</button>
+              <button class="filter-chip" data-filter="kimi">Kimi</button>
+              <button class="filter-chip" data-filter="gpt">GPT</button>
+              <button class="filter-chip" data-filter="zenmux">ZenMux</button>
+            </div>
+            <div class="roster-toolbar-right">
+              <input type="text" id="rosterSearchInput" class="search-input" placeholder="🔍 搜索姓名 / 模型 / 称号 / 风格..." />
+              <button id="btnStartCreatePlayer" class="btn btn-gold btn-sm">➕ 新增 AI 牌手</button>
+            </div>
+          </div>
+
+          <!-- Horizontal List Rows Container -->
+          <div id="rosterHorizontalList" class="horizontal-player-list"></div>
+        </div>
+
+        <!-- Right Pane: Player Detail & Editor (Opens when clicking any horizontal row or "新增 AI 牌手") -->
+        <div id="playerDetailPane" class="player-detail-pane">
+          <div id="playerDetailContent"></div>
+        </div>
+      </div>
+
+      <!-- View B: Current Table Seats (Horizontal List) & Table Settings -->
+      <div id="tableSeatsView" class="modal-body hidden">
+        <div class="blinds-config-bar">
+          <div class="config-field-inline">
+            <label>当前牌桌名称</label>
+            <input type="text" id="cfgTableName" class="input-text-sm" placeholder="牌桌名称" />
+          </div>
+          <div class="config-field-inline">
+            <label>牌桌模式</label>
+            <select id="cfgTableMode">
+              <option value="play">🎮 人机对战 (含人类玩家)</option>
+              <option value="spectate">👁️ 纯 AI 观战 (全 AI 明牌对决)</option>
+            </select>
+          </div>
+          <div class="config-field-inline">
+            <label>小盲 (SB)</label>
+            <input type="number" id="cfgSmallBlind" value="10" min="1" max="5000" />
+          </div>
+          <div class="config-field-inline">
+            <label>大盲 (BB)</label>
+            <input type="number" id="cfgBigBlind" value="20" min="2" max="10000" />
+          </div>
+          <div class="config-field-inline">
+            <label>快速预设阵容</label>
+            <select id="presetSelector">
+              <option value="">-- 选择预设阵容切换 --</option>
+              <option value="mixed_all_stars">🔥 全明星人机混合局</option>
+              <option value="five_vendors">🌐 五大厂商人机局</option>
+              <option value="five_agents">🤖 五大 Agent 人机局</option>
+              <option value="spectate_vendors_clash">👁️ 纯AI观战 · 六大旗舰争霸</option>
+              <option value="spectate_agents_arena">👁️ 纯AI观战 · 五大Agent乱斗</option>
+            </select>
+          </div>
+          <button id="btnSaveTableSettings" class="btn btn-gold btn-sm">💾 保存牌桌设置</button>
+        </div>
+
+        <div class="table-seats-header-row">
+          <div>
+            <strong>当前牌桌在座牌手（横向列表展开 · 点击任意行查看/编辑牌手详情）</strong>
+            <span class="sub-hint">单桌支持 2 ~ 9 个座位，可随时从 26+ 牌手库增加 AI 牌手或移除座位</span>
+          </div>
+          <button id="btnSwitchToRosterToAdd" class="btn btn-gold btn-sm">➕ 从牌手库增加 AI 牌手到本桌</button>
+        </div>
+
+        <div id="tableSeatsHorizontalList" class="horizontal-player-list"></div>
+      </div>
+
+      <div class="modal-footer">
+        <div id="driverTestResultBar" class="driver-test-result-bar">
+          🟢 SQLite 数据库实时同步已开启 · 所有新增牌手、人设、思考强度与对局记录自动持久化。
+        </div>
+        <div class="modal-footer-btns">
+          <button class="btn btn-glass" data-close="rosterModal">关闭窗口</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Modal 2: Create New Poker Table Modal (Supports Play or Spectate Mode)
+       ========================================================================= -->
+  <div id="newTableModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2>➕ 新建德州扑克牌桌（支持人机参战 / 纯 AI 观战）</h2>
+          <p class="modal-desc">可创建多个独立牌桌，自由勾选上桌的 AI 牌手，随时切换牌桌参战或观战。</p>
+        </div>
+        <button class="btn-close-modal" data-close="newTableModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>牌桌名称</label>
+            <input type="text" id="newTableName" value="🔥 巅峰新桌 · 大师局" />
+          </div>
+          <div class="form-group">
+            <label>牌桌模式</label>
+            <select id="newTableMode">
+              <option value="spectate">👁️ 纯 AI 观战桌（0 人类 · 全 AI 自动对决明牌观战）</option>
+              <option value="play">🎮 人机对战桌（你 + 多名 AI 牌手同台竞技）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>小盲注 / 大盲注</label>
+            <div class="inline-pair">
+              <input type="number" id="newTableSB" value="20" min="1" />
+              <span>/</span>
+              <input type="number" id="newTableBB" value="40" min="2" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>初始筹码</label>
+            <input type="number" id="newTableChips" value="3000" min="200" step="100" />
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 12px;">
+          <div class="label-row-between">
+            <label><strong>选择加入该牌桌的初始 AI 牌手（最多选 8 位）：</strong></label>
+            <span id="newTableSelectedCount" class="mini-tag">已选 6 位</span>
+          </div>
+          <div id="newTablePlayerPickerList" class="horizontal-player-list compact-picker-list"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-glass" data-close="newTableModal">取消</button>
+        <button id="btnConfirmCreateTable" class="btn btn-gold">🚀 立即创建并进入牌桌</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Modal 3: SQLite Persisted Hand History & Full Replay Center
+       ========================================================================= -->
+  <div id="historyModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-xxl">
+      <div class="modal-header">
+        <div>
+          <h2>🗄️ SQLite 数据库持久化对局记录与复盘中心</h2>
+          <p class="modal-desc">每一手牌的公共牌、底池、赢家、座位筹码变动以及每位 AI 的思考推理过程均已持久化至本地 SQLite 数据库。</p>
+        </div>
+        <button class="btn-close-modal" data-close="historyModal">✕</button>
+      </div>
+      <div class="modal-body history-split-layout">
+        <div class="history-list-pane">
+          <div class="history-filter-bar">
+            <select id="historyTableFilter">
+              <option value="">🌐 全部牌桌对局记录</option>
+            </select>
+            <button id="btnRefreshHistory" class="btn btn-xs btn-glass">🔄 刷新</button>
+          </div>
+          <div id="historyRecordsList" class="history-records-list"></div>
+        </div>
+        <div id="historyDetailPane" class="history-detail-pane">
+          <div class="empty-hint">👈 请在左侧点击任意一手历史对局，查看完整的街道动作、亮牌结算与 AI 思考日志。</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="sub-hint">💾 数据库文件路径：<code>data/poker-arena.sqlite</code></div>
+        <button class="btn btn-gold" data-close="historyModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Unified Agent Prompt & Anti-Deviation Guardrail Center -->
+  <div id="promptModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2>🛡️ Agent 统一防越界提示词与安全护栏</h2>
+          <p class="modal-desc">
+            针对 Codex、Gemini、Claude Code、Pi、OpenCode2 设置统一系统提示词与零工具沙箱参数，防止 Agent 调用外部工具或出现预期外行为。
+          </p>
+        </div>
+        <button class="btn-close-modal" data-close="promptModal">✕</button>
+      </div>
+
+      <div class="modal-body prompt-modal-body">
+        <div class="guardrail-layers-grid">
+          <div class="guard-layer-card">
+            <div class="guard-layer-title">① 统一系统提示词十项铁律</div>
+            <p>锁定德州扑克牌手身份，严禁进入编程模式、严禁反问、严禁泄露底牌、强制纯 JSON 输出。</p>
+          </div>
+          <div class="guard-layer-card">
+            <div class="guard-layer-title">② 物理禁用 Agent 工具参数</div>
+            <p>Claude Code (<code>--tools "" --strict-mcp-config</code>)、Pi (<code>-nt --no-mcp</code>)、Codex (<code>--ignore-user-config -s read-only</code>)。</p>
+          </div>
+          <div class="guard-layer-card">
+            <div class="guard-layer-title">③ 独立空沙箱目录隔离</div>
+            <p>所有 Agent 在 <code>/tmp/texas-holdem-agent-sandbox</code> 空目录运行，隔绝源码与底牌数据。</p>
+          </div>
+          <div class="guard-layer-card">
+            <div class="guard-layer-title">④ 合法动作与筹码边界校准</div>
+            <p>自动剥离 CLI 噪声并校验 <code>legalActionTypes</code> 与加注上下限。</p>
+          </div>
+        </div>
+
+        <div class="prompt-editor-section">
+          <div class="prompt-editor-header">
+            <label for="txtUnifiedSystemPrompt"><strong>统一系统提示词模板 (Unified Agent System Prompt)：</strong></label>
+            <button id="btnPreviewLivePrompt" class="btn btn-xs btn-glass">🔍 预览当前牌局完整 Prompt</button>
+          </div>
+          <textarea id="txtUnifiedSystemPrompt" rows="11"></textarea>
+        </div>
+
+        <div id="livePromptPreviewBox" class="live-prompt-preview hidden">
+          <div class="preview-title">实时生成的完整下发 Prompt 预览：</div>
+          <pre id="livePromptPreviewText"></pre>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btnResetUnifiedPrompt" class="btn btn-glass">↺ 恢复默认模板</button>
+        <div class="modal-footer-btns">
+          <button class="btn btn-glass" data-close="promptModal">关闭</button>
+          <button id="btnSaveUnifiedPrompt" class="btn btn-gold">💾 保存提示词</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5: Texas Hold'em Hand Rankings & Rules Reference -->
+  <div id="rulesModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <div>
+          <h2>📖 德州扑克牌型图鉴</h2>
+          <p class="modal-desc">2 张底牌 + 5 张公共牌，7 选 5 组成最大五张牌型。</p>
+        </div>
+        <button class="btn-close-modal" data-close="rulesModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="hand-rank-list">
+          <div class="hand-rank-item"><span class="rank-badge gold">1. 皇家同花顺</span><span>同花色 A-K-Q-J-10</span><span class="rank-sample">♠A ♠K ♠Q ♠J ♠10</span></div>
+          <div class="hand-rank-item"><span class="rank-badge gold">2. 同花顺</span><span>同花色连续五张牌</span><span class="rank-sample">♥9 ♥8 ♥7 ♥6 ♥5</span></div>
+          <div class="hand-rank-item"><span class="rank-badge purple">3. 四条 (金刚)</span><span>四张同点数 + 单张</span><span class="rank-sample">♠Q ♥Q ♦Q ♣Q ♠7</span></div>
+          <div class="hand-rank-item"><span class="rank-badge purple">4. 葫芦 (满堂红)</span><span>三条 + 一对</span><span class="rank-sample">♠K ♥K ♦K ♠9 ♥9</span></div>
+          <div class="hand-rank-item"><span class="rank-badge blue">5. 同花</span><span>五张同花色非连牌</span><span class="rank-sample">♦A ♦J ♦8 ♦5 ♦2</span></div>
+          <div class="hand-rank-item"><span class="rank-badge blue">6. 顺子</span><span>五张连续点数非同花</span><span class="rank-sample">♠10 ♥9 ♦8 ♣7 ♠6</span></div>
+          <div class="hand-rank-item"><span class="rank-badge emerald">7. 三条</span><span>三张同点数 + 两散牌</span><span class="rank-sample">♠8 ♥8 ♦8 ♠A ♥4</span></div>
+          <div class="hand-rank-item"><span class="rank-badge emerald">8. 两对</span><span>两组对子 + 踢脚</span><span class="rank-sample">♠J ♥J ♦4 ♣4 ♠A</span></div>
+          <div class="hand-rank-item"><span class="rank-badge">9. 一对</span><span>一对 + 三张踢脚</span><span class="rank-sample">♠A ♥A ♦K ♣9 ♠5</span></div>
+          <div class="hand-rank-item"><span class="rank-badge">10. 高牌</span><span>按最大单张比大小</span><span class="rank-sample">♠A ♥Q ♦9 ♣6 ♠2</span></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div>快捷键：<code>[Space]</code> 发牌 ｜ <code>[F]</code> 弃牌 ｜ <code>[C]</code> 过/跟 ｜ <code>[R]</code> 加注 ｜ <code>[A]</code> 全下</div>
+        <button class="btn btn-gold" data-close="rulesModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Quick Seat Picker for Any Table in the Lobby (点将入座) -->
+  <div id="quickSeatModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2 id="quickSeatModalTitle">💺 为牌桌派遣 AI 牌手入座</h2>
+          <p class="modal-desc">从下方 26+ 位 AI 牌手横向列表中点击任意一位，即可立即派上该牌桌空位（或点击「👑 我本人入座参战」）。</p>
+        </div>
+        <button class="btn-close-modal" data-close="quickSeatModal">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;max-height:70vh;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <input type="text" id="quickSeatSearchInput" class="search-input" placeholder="🔍 搜索要派上桌的 AI 牌手姓名 / 厂商 / 模型 / 称号..." />
+          <button id="btnQuickSeatHuman" class="btn btn-gold btn-sm">👑 我本人坐上此桌参战</button>
+        </div>
+        <div id="quickSeatHorizontalList" class="horizontal-player-list" style="max-height:460px;"></div>
+      </div>
+      <div class="modal-footer">
+        <span class="sub-hint">💡 想创建全新的自定义 AI 牌手？可点击顶部「👥 牌手库」→「➕ 新增 AI 牌手」。</span>
+        <button class="btn btn-glass" data-close="quickSeatModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Modal 7: AI Thinking Process & Decision Details Inspector (AI 思考过程与决策细节透视中心)
+       ========================================================================= -->
+  <div id="aiThinkingModal" class="modal-backdrop hidden">
+    <div class="modal-card modal-xxl">
+      <div class="modal-header">
+        <div>
+          <h2>🧠 AI 牌手思考过程与决策细节透视中心</h2>
+          <p class="modal-desc">
+            支持按任意 AI 牌手筛选或查看全桌思考流。完整展示每次决策时的<strong>底牌与公共牌快照、底池赔率、合法动作边界、战术推理过程、原生思维链 (CoT) 以及完整下发 Prompt 与原始 JSON 响应</strong>。
+          </p>
+        </div>
+        <button class="btn-close-modal" data-close="aiThinkingModal">✕</button>
+      </div>
+
+      <div class="modal-body thinking-modal-body">
+        <!-- Player Filter Bar -->
+        <div class="thinking-toolbar">
+          <div id="thinkingPlayerTabs" class="thinking-player-tabs"></div>
+          <div class="thinking-toolbar-right">
+            <button id="btnThinkingOpenHistory" class="btn btn-xs btn-glass">🗄️ 查看历史对局思考复盘</button>
+          </div>
+        </div>
+
+        <!-- Selected AI Player Persona & Engine Banner -->
+        <div id="thinkingPlayerProfileBanner" class="thinking-profile-banner hidden"></div>
+
+        <!-- Detailed Thinking Timeline Cards -->
+        <div id="thinkingTimelineList" class="thinking-timeline-list"></div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="sub-hint">💡 提示：在牌桌上直接点击任意 AI 座位旁的「🧠 思考」按钮或对话气泡，即可直达该 AI 牌手的专属思考透视。</span>
+        <button class="btn btn-gold" data-close="aiThinkingModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

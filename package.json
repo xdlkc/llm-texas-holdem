@@ -1,0 +1,13 @@
+{
+  "name": "llm-texas-holdem",
+  "version": "1.0.0",
+  "description": "1 Human + Multi-LLM & Multi-Agent No-Limit Texas Hold'em Poker (OpenAI & Anthropic Protocols + Codex, Gemini, Claude Code, Pi, OpenCode2)",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
