@@ -1,51 +1,111 @@
-# Royal Hold'em AI Arena · 1人 + 多大模型/Agent 无限注德州扑克游戏大厅
+# Royal Hold'em AI Arena (`llm-texas-holdem`)
 
-支持 **1 名人类玩家 + 多名大模型 / CLI Agent 玩家**同台竞技与拉斯维加斯式多桌并发观战的无限注德州扑克（No-Limit Texas Hold'em）Web 应用。
+English | [简体中文](./README.zh-CN.md)
 
-## 核心特性
+A zero-dependency Node.js web arena for **1 Human + Multi-LLM & Multi-CLI-Agent No-Limit Texas Hold'em**, featuring a Las Vegas-style concurrent multi-table lobby, dual OpenAI & Anthropic protocols, verifiable CSPRNG deck shuffling, an AI Thinking Inspector, and full SQLite persistence.
 
-1. **双协议支持（OpenAI & Anthropic）**
-   - 每个 AI 牌手席位均支持切换 **OpenAI 协议**（`POST /v1/chat/completions`）与 **Anthropic 协议**（`POST /v1/messages`）。
-   - 自动对接本机统一模型入口（`ModelHub` `http://127.0.0.1:4319`）与已配置凭据，同时也支持在界面中为任意席位单独配置自定义 `Base URL`、`API Key` 与 `Model ID`。
+## Core Capabilities
 
-2. **五大模型厂商类（Vendor Drivers）**
-   - `deepseek`（DeepSeek · `deepseek-flash` / `deepseek-v4-pro` / `deepseek-chat` / `deepseek-reasoner`）
-   - `zhipu-token-plan`（智谱 Token Plan · `glm-5.3-flash` / `glm-5.3` / `glm-5.3-flashx`）
-   - `kimi`（Kimi · `k3.1-pro-highspeed` / `k3.1-pro`）
-   - `gpt`（GPT / OpenAI · `openai/gpt-5.4-mini` / `openai/gpt-6-astra` / `openai/gpt-6.1-sol` / `openai/gpt-5.4` / `gpt-4o`）
-   - `zenmux`（ZenMux · `anthropic/claude-haiku-5.5` / `anthropic/claude-sonnet-5.5` / `anthropic/claude-opus-5.5` / `google/gemini-3.8-flash` 等）
+### 1. Dual Protocols & ModelHub Integration
 
-3. **五大 Agent 类（CLI Agent Drivers）**
-   - `codex`（OpenAI Codex CLI）
-   - `gemini`（Gemini / Antigravity CLI `agy`）
-   - `claude-code`（Anthropic Claude Code CLI `claude`）
-   - `pi`（Pi Coding Agent CLI `pi`）
-   - `opencode2`（OpenCode v2 CLI `opencode2`）
-   - 支持为每个 Agent 玩家绑定底层模型厂商、具体模型与 4 档思考强度（`low` / `medium` / `high` / `max`）。
+- **OpenAI & Anthropic Protocols**: Every AI seat can be routed through either the **OpenAI protocol** (`POST /v1/chat/completions`, `Authorization: Bearer`) or the **Anthropic protocol** (`POST /v1/messages`, `x-api-key` + `anthropic-version: 2023-06-01`).
+- **Local ModelHub & Custom Endpoints**: Integrates automatically with a local [**ModelHub**](https://github.com/xdlkc/loom) gateway (`http://127.0.0.1:4319`) and local credential files, with automatic failover when an upstream route returns permission/rate errors. Any seat can also be configured in the UI with a custom `Base URL`, `API Key`, and `Model ID`.
 
-4. **拉斯维加斯 / QQ 游戏大厅多桌并发架构 & 独立 CSPRNG 随机牌靴**
-   - **默认所有牌桌大厅视角**：内置 10 张不同规格牌桌（人机主桌、五大厂商争霸、五大 Agent 乱斗、澳门豪客桌、HU 单挑擂台、闪电快刀 6-Max、OpenAI vs Anthropic 双协议对抗、WSOP 九人满员桌、自由约局包厢），并支持随时新增自定义牌桌。
-   - **可验证独立加密洗牌（CSPRNG）**：每张牌桌每手牌均通过 `node:crypto.randomInt` 执行独立 Fisher-Yates 洗牌，并生成唯一牌靴编号（`shoeId`）与整副 52 张牌序列的 `SHA-256 deckHash` 承诺。
-   - **灵活启停控制**：支持一键停止全部牌桌、开启/暂停全场并发博弈，以及对单张牌桌独立暂停/恢复。
+### 2. Five Model Vendor Drivers & Five CLI Agent Drivers
 
-5. **AI 思考透视镜（Thinking Inspector）与 SQLite 全量持久化**
-   - **深度思考透视（`#aiThinkingModal`）**：支持实时查看每位 AI 牌手每一步决策的「起手底牌 + 公共牌 + 牌型评估」、「底池赔率与后手筹码约束」、「三段式战术推理」、「原生思维链（`<think>` / `reasoning_content` / Anthropic `thinking` block）」以及完整的「System / User Prompt 与 Raw Output 快照」。
-   - **SQLite 数据库（`node:sqlite`）持久化**：自动持久化 26+ 位初始化 AI 牌手（`厂商 × 模型` + `五大 Agent`，每位均具备完整五段式人设与生涯战绩统计）、多牌桌座位状态，以及每一手牌（含 `in_progress` 与 `completed`）和每一步动作细节。
+- **5 Model Vendors (`VENDOR_CATALOG`, 21 pre-seeded models)**:
+  - `deepseek` (`deepseek-flash`, `deepseek-v4-pro`, `deepseek-chat`, `deepseek-reasoner`)
+  - `zhipu-token-plan` (`glm-5.3-flash`, `glm-5.3`, `glm-5.3-flashx`)
+  - `kimi` (`k3.1-pro-highspeed`, `k3.1-pro`)
+  - `gpt` (`openai/gpt-5.4-mini`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, `openai/gpt-5.4`, `gpt-4o`)
+  - `zenmux` (`anthropic/claude-haiku-5.5`, `anthropic/claude-sonnet-5.5`, `anthropic/claude-opus-5.5`, `openai/gpt-6-astra`, `google/gemini-3.8-flash`, `deepseek/deepseek-v4.1-flash`, `moonshotai/kimi-k3.1-pro`)
+- **5 CLI Agents (`AGENT_CATALOG`)**:
+  - `codex` (OpenAI Codex CLI, `~/.local/bin/codex`)
+  - `gemini` (Gemini / Antigravity CLI, `~/.local/bin/agy`)
+  - `claude-code` (Anthropic Claude Code CLI, `~/.local/bin/claude`)
+  - `pi` (Pi Coding Agent CLI, `~/.local/bin/pi`)
+  - `opencode2` (OpenCode v2 CLI, `~/.local/bin/opencode2`)
+- **Configurable Thinking Effort**: Every AI seat supports 4 reasoning tiers (`low`, `medium`, `high`, `max`), mapped to protocol `max_tokens` (`1024`–`4096`) or agent reasoning flags.
 
-6. **Agent 统一防越界提示词与四重安全护栏**
-   - **第一重（统一防越界系统提示词）**：内置十项铁律，强制锁定德州扑克牌手身份，严禁进入代码助手模式、严禁反问、严禁输出非 JSON 文本。
-   - **第二重（CLI 零工具调用参数）**：自动注入 `--tools ""`、`--strict-mcp-config`、`-nt --no-mcp -ne -ns`、`--ignore-user-config -s read-only` 等参数物理禁用全部外部工具。
-   - **第三重（独立空沙箱目录隔离）**：所有 Agent 进程固定在 `/tmp/texas-holdem-agent-sandbox` 空目录运行，隔绝项目源码与服务器状态。
-   - **第四重（JSON Schema 强约束与合法性校准器）**：自动清洗 CLI 输出噪声、提取决策 JSON，并自动校准非法 `check` 或越界 `raise`。
+### 3. Multi-Table Casino Lobby & Verifiable CSPRNG Shoes
 
-## 启动与测试
+- **10 Pre-Seeded Tables + Custom Tables**: Opens into a game-hall overview covering human-vs-AI tables, 5-vendor clashes, 5-agent sandboxes, high-roller deep-stack rooms, heads-up duels, fast blitz 6-max, OpenAI-vs-Anthropic protocol matches, a 9-max full ring, and open custom tables (plus 5 quick lineup presets).
+- **Concurrent Background Casino**: When enabled, background spectator tables run concurrently in round-robin waves (up to `MAX_CONCURRENT_LLM_TABLES = 3` in-flight LLM/agent requests), with instant per-table pause/resume and one-click stop-all controls.
+- **3-Pass CSPRNG Shuffle & Commitments**: Each hand creates an independent 52-card deck via `node:crypto.randomInt` (Fisher-Yates pass -> random cut between cards 12 and 40 -> second Fisher-Yates pass) and computes a unique `shoeId` and `SHA-256` `deckHash`.
+- **Complete Hold'em Rules Engine**: Evaluates all 10 hand categories (including A-5 wheel straights), computes main pots and multi-way side pots, returns uncalled bets, and preserves chip conservation.
 
-> 依赖要求：Node.js `>= 22.5`（使用内置 `node:sqlite` 零外部依赖）
+### 4. AI Thinking Inspector & SQLite Persistence
+
+- **Thinking Inspector Modal**: Inspect each AI decision's hole cards, board texture, hand evaluation, pot odds, remaining stack, 3-part tactical reasoning, native chain-of-thought (`<think>`, `reasoning_content`, or Anthropic `thinking` blocks), full system/user prompt snapshots, and raw model output.
+- **Zero-Dependency SQLite (`node:sqlite`)**: Persists state to `data/poker-arena.sqlite` (WAL mode) across 5 tables (`app_settings`, `ai_players`, `poker_tables`, `hand_records`, `hand_actions`), storing all 26+ seeded AI personas and lifetime stats, table seat states, both `in_progress` and `completed` hands, and step-by-step action telemetry.
+
+### 5. Four-Layer Anti-Deviation Agent Guardrail
+
+1. **10-Rule Locked System Prompt** ([`src/ai/agentPromptGuard.mjs`](./src/ai/agentPromptGuard.mjs)): Locks CLI coding agents into a Texas Hold'em player identity, forbidding coding-assistant mode, file/env probing, follow-up questions, and non-JSON text.
+2. **Zero-Tool CLI Sandboxing**: Injects tool-disabling flags per CLI (`--tools "" --strict-mcp-config --disable-slash-commands` for Claude Code, `-nt --no-mcp -ne -ns --no-session` for Pi, `--ignore-user-config --ephemeral -s read-only --output-schema` for Codex, `--disable-slash-commands` for `agy`).
+3. **Empty Working Directory**: Spawns every CLI agent inside an isolated temporary directory (`/tmp/texas-holdem-agent-sandbox`), isolated from the repo source and server state.
+4. **Schema Validation & Legality Calibrator**: Strips ANSI codes and CLI banners, extracts the decision JSON (`{action, amount, reasoning, table_talk}`), blocks illegal `check` when facing a bet, and clamps `raise` amounts to `[minRaiseTo, maxRaiseTo]` (converting overflow raises to `all_in`).
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js `>= 22.5`** (required for built-in `node:sqlite`; zero external `npm` dependencies).
+- Optional: local [ModelHub](https://github.com/xdlkc/loom) running on `http://127.0.0.1:4319` or direct vendor API keys / local CLI agent binaries (`codex`, `agy`, `claude`, `pi`, `opencode2`) in `~/.local/bin`.
+
+### Run & Test
 
 ```bash
-# 运行单元测试与集成测试
+# Run all unit and integration tests (10 tests across 3 suites)
 npm test
 
-# 启动德州扑克服务端 (默认 http://127.0.0.1:4399)
+# Start the server (defaults to http://127.0.0.1:4399)
 npm start
+```
+
+You can override the bind host and port with environment variables:
+
+```bash
+HOST=127.0.0.1 PORT=4399 npm start
+```
+
+On macOS, double-click or execute [`start.command`](./start.command) to launch the server on port `4399` and automatically open `http://127.0.0.1:4399` in your default browser.
+
+### Keyboard Shortcuts (In-Table View)
+
+| Key | Action |
+| --- | --- |
+| `Space` | Deal next hand (when `idle` or `showdown`) |
+| `F` | Fold |
+| `C` | Check / Call |
+| `R` | Raise |
+| `A` | All-In |
+| `Esc` | Close active modal |
+
+## Project Structure
+
+```text
+.
+├── package.json                      # Module manifest & npm scripts (start, test)
+├── start.command                     # macOS double-click launcher (opens http://127.0.0.1:4399)
+├── src/
+│   ├── server.mjs                    # HTTP server, REST APIs, multi-table casino loop
+│   ├── ai/
+│   │   ├── agentPromptGuard.mjs      # 10-rule prompt lock, sandbox dir, JSON sanitizer/calibrator
+│   │   ├── providers.mjs             # OpenAI/Anthropic callers, ModelHub failover, 5 CLI drivers
+│   │   └── rosterSeed.mjs            # 26 seeded AI players, 5 persona archetypes, 4 effort tiers
+│   ├── db/
+│   │   └── database.mjs              # node:sqlite schema, seeders, player/table/hand persistence
+│   └── poker/
+│       ├── cards.mjs                 # 3-pass CSPRNG shuffle, shoeId & SHA-256 deckHash
+│       ├── engine.mjs                # No-Limit Hold'em state machine, blinds, main/side pots
+│       └── evaluator.mjs             # 5-card & 7-card hand evaluator (all 10 ranks)
+├── public/
+│   ├── index.html                    # Multi-table lobby & poker table HUD
+│   ├── app.js                        # Client state, Web Audio casino SFX, inspector modals
+│   └── styles.css                    # Casino table & modal styling
+└── test/
+    ├── poker.test.mjs                # Deck parsing, evaluator, fold award, multi-way side pots
+    ├── ai-guardrail.test.mjs         # Catalog checks, noise stripping, illegal-move clamping
+    └── db-and-multitable.test.mjs    # SQLite seeding, HTTP APIs, concurrent CSPRNG hall
 ```
